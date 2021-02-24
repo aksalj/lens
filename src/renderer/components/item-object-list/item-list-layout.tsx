@@ -329,6 +329,7 @@ export class ItemListLayout extends React.Component<ItemListLayoutProps> {
       const toggleFilters = () => storage.merge(draft => {
         draft.showFilters = !draft.showFilters;
       });
+
       return (
         <><a onClick={toggleFilters}>Filtered</a>: {itemsCount} / {allItemsCount}</>
       );

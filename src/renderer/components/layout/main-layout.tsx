@@ -24,13 +24,13 @@ export class MainLayout extends React.Component<MainLayoutProps> {
     sidebarStorage.merge(draft => {
       draft.compact = !draft.compact;
     });
-  }
+  };
 
   onSidebarResize = (width: number) => {
     sidebarStorage.merge(draft => {
       draft.width = width;
     });
-  }
+  };
 
   render() {
     const cluster = getHostedCluster();

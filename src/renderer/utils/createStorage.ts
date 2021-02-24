@@ -1,87 +1,116 @@
-// Helper for work with storage api (e.g. window.localStorage)
+// Helper for work with persistent local storage (e.g. window.localStorage, file-system, etc.)
+// TODO: write unit/integration tests
 
-import { observable, toJS } from "mobx"
-import { Draft, produce } from "immer"
+import { CreateObservableOptions } from "mobx/lib/api/observable";
+import { observable, toJS } from "mobx";
+import { Draft, produce } from "immer";
 
-export function createStorage<T>(key: string, defaultValue?: T, options?: IStorageHelperOptions<T>) {
+export function createStorage<T>(key: string, defaultValue?: T, options?: StorageHelperOptions<T>) {
   return new StorageHelper(key, defaultValue, options);
 }
 
-export interface IStorageHelperOptions<T = any> {
+export interface StorageHelperOptions<T = any> {
   autoInit?: boolean; // default: true, preload data at early stages (e.g. in place of use)
-  observable?: boolean; // default: true, keeps observable state in memory
-  webStorage?: "local" | "session" | false; // type of web-storage for persistence, "false" - skip saving to storage.
-  preload?(instance: StorageHelper<T>): T | Promise<T>; // customize data loading
+  observable?: boolean | CreateObservableOptions; // default: true, keeps observable state in memory
+  storageAdapter?: StorageAdapter<T>;
 }
 
-export class StorageHelper<T> {
-  static defaultOptions: IStorageHelperOptions = {
-    webStorage: "local",
+export interface StorageAdapter<T = any> {
+  getItem(key: string): T | Promise<T>;
+  setItem(key: string, value: T): void;
+  removeItem(key: string): void;
+}
+
+export const localStorageAdapter: StorageAdapter = {
+  getItem(key: string) {
+    return JSON.parse(localStorage.getItem(key));
+  },
+  setItem(key: string, value: any) {
+    localStorage.setItem(key, JSON.stringify(value));
+  },
+  removeItem(key: string) {
+    localStorage.removeItem(key);
+  }
+};
+
+export class StorageHelper<T = any> {
+  static defaultOptions: StorageHelperOptions = {
     autoInit: true,
     observable: true,
-    preload: instance => instance.getStorageValue(),
+    storageAdapter: localStorageAdapter,
   };
 
-  @observable.shallow protected data: T;
-  protected initialized = false;
-  protected options: IStorageHelperOptions;
+  @observable initialized = false;
+  protected options: StorageHelperOptions;
+  protected storage: StorageAdapter<T>;
+  protected data = observable.box<T>();
 
-  constructor(readonly key: string, readonly defaultValue?: T, options: IStorageHelperOptions = {}) {
+  constructor(readonly key: string, readonly defaultValue?: T, options: StorageHelperOptions = {}) {
     this.options = { ...StorageHelper.defaultOptions, ...options };
+    this.storage = this.options.storageAdapter;
+
+    if (typeof this.options.observable === "object") {
+      this.configure({ observable: this.options.observable });
+    }
 
     if (this.options.autoInit) {
       this.init();
     }
   }
 
+  configure(config: { observable?: CreateObservableOptions } = {}) {
+    if (config.observable) {
+      this.data = observable.box<T>(this.data.get(), config.observable);
+    }
+  }
+
   async init() {
     if (this.initialized) return;
+
     try {
-      const preload = this.options.preload(this);
-      let initialValue: T = preload instanceof Promise ? await preload : preload;
-      this.set(initialValue);
+      const value: T = await this.storage.getItem(this.key);
+
+      if (value != null) this.set(value);
       this.initialized = true;
     } catch (error) {
     }
   }
 
-  protected get storage(): Storage | null {
-    switch (this.options.webStorage) {
-      case "local":
-        return window.localStorage;
-      case "session":
-        return window.sessionStorage;
-    }
-  }
-
   getStorageValue(): T {
-    const rawValue = this.storage?.getItem(this.key);
+    try {
+      const value = this.storage.getItem(this.key);
 
-    if (typeof rawValue === "string") {
-      try {
-        return JSON.parse(rawValue);
-      } catch (e) {
+      if (value != null && !(value instanceof Promise)) {
+        return value;
       }
+    } catch (error) {
+      console.error(error, this);
     }
 
     return this.defaultValue;
   }
 
   get(): T {
-    if (this.options.observable) {
-      return this.data;
+    const value = this.data.get();
+
+    // get from memory
+    if (this.options.observable && value != null) {
+      return value;
     }
 
+    // read from storage or return default-value
     return this.getStorageValue();
   }
 
   set(value: T) {
+    if (this.options.observable) {
+      this.data.set(value);
+    }
+
     try {
-      this.storage?.setItem(this.key, JSON.stringify(value));
-      if (this.options.observable) {
-        this.data = value;
-      }
+      this.storage.setItem(this.key, value);
     } catch (error) {
+      console.error(error, this);
     }
   }
 
@@ -89,13 +118,20 @@ export class StorageHelper<T> {
     try {
       const currentValue = toJS(this.get());
       const nextValue = produce(currentValue, updater) as T;
+
       this.set(nextValue);
     } catch (error) {
+      console.error(error, this);
     }
   }
 
   clear() {
-    this.data = null;
-    this.storage?.removeItem(this.key);
+    this.data.set(null);
+
+    try {
+      this.storage.removeItem(this.key);
+    } catch (error) {
+      console.error(error, this);
+    }
   }
 }

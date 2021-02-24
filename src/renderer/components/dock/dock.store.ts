@@ -1,5 +1,5 @@
 import MD5 from "crypto-js/md5";
-import { action, computed, IReactionOptions, observable, reaction } from "mobx";
+import { action, comparer, computed, IReactionOptions, observable, reaction } from "mobx";
 import { autobind, createStorage } from "../../utils";
 import throttle from "lodash/throttle";
 
@@ -21,28 +21,60 @@ export interface IDockTab {
   pinned?: boolean; // not closable
 }
 
+export interface DockStorage {
+  isOpen: boolean;
+  height: number;
+  tabs: IDockTab[];
+  selectedTabId?: TabId;
+}
+
 @autobind()
 export class DockStore {
-  protected initialTabs: IDockTab[] = [
-    { id: "terminal", kind: TabKind.TERMINAL, title: "Terminal" },
-  ];
+  readonly minHeight = 100;
 
-  protected storage = createStorage("dock", {}); // keep settings in localStorage
-  public readonly defaultTabId = this.initialTabs[0].id;
-  public readonly minHeight = 100;
+  static get defaultHeight(){
+    return Math.round(window.innerHeight / 2.5);
+  }
 
-  @observable isOpen = false;
   @observable fullSize = false;
-  @observable height = this.defaultHeight;
-  @observable tabs = observable.array<IDockTab>(this.initialTabs);
-  @observable selectedTabId = this.defaultTabId;
+  @observable isOpen: boolean;
+  @observable height: number;
+  @observable tabs: IDockTab[] = [];
+  @observable selectedTabId: TabId;
+
+  protected storage = createStorage<DockStorage>("dock", {
+    isOpen: false,
+    height: DockStore.defaultHeight,
+    tabs: [
+      { id: "terminal", kind: TabKind.TERMINAL, title: "Terminal" },
+    ],
+  });
+
+  constructor() {
+    this.init();
+  }
+
+  private async init() {
+    // restore state after reload
+    this.restoreState(this.storage.get());
+
+    // sync storable state with local storage
+    reaction(this.getStorableData, data => this.storage.set(data), {
+      equals: comparer.shallow,
+    });
+
+    // adjust terminal height if window size changes
+    window.addEventListener("resize", throttle(this.checkMaxHeight, 250));
+  }
+
+  getStorableData = (): DockStorage => {
+    const { isOpen, tabs, selectedTabId, height } = this;
+
+    return { isOpen, tabs, selectedTabId, height };
+  };
 
   @computed get selectedTab() {
     return this.tabs.find(tab => tab.id === this.selectedTabId);
-  }
-
-  get defaultHeight() {
-    return Math.round(window.innerHeight / 2.5);
   }
 
   get maxHeight() {
@@ -50,30 +82,14 @@ export class DockStore {
     const mainLayoutTabs = 33;
     const mainLayoutMargin = 16;
     const dockTabs = 33;
-    const preferedMax = window.innerHeight - mainLayoutHeader - mainLayoutTabs - mainLayoutMargin - dockTabs;
+    const preferredMax = window.innerHeight - mainLayoutHeader - mainLayoutTabs - mainLayoutMargin - dockTabs;
 
-    return Math.max(preferedMax, this.minHeight); // don't let max < min
-  }
-
-  constructor() {
-    Object.assign(this, this.storage.get());
-
-    reaction(() => ({
-      isOpen: this.isOpen,
-      selectedTabId: this.selectedTabId,
-      height: this.height,
-      tabs: this.tabs.slice(),
-    }), data => {
-      this.storage.set(data);
-    });
-
-    // adjust terminal height if window size changes
-    window.addEventListener("resize", throttle(this.checkMaxHeight, 250));
+    return Math.max(preferredMax, this.minHeight); // don't let max < min
   }
 
   protected checkMaxHeight() {
     if (!this.height) {
-      this.setHeight(this.defaultHeight || this.minHeight);
+      this.setHeight(DockStore.defaultHeight || this.minHeight);
     }
 
     if (this.height > this.maxHeight) {
@@ -165,7 +181,7 @@ export class DockStore {
     if (!tab || tab.pinned) {
       return;
     }
-    this.tabs.remove(tab);
+    this.tabs = this.tabs.filter(tab => tab.id !== tabId);
 
     if (this.selectedTabId === tab.id) {
       if (this.tabs.length) {
@@ -178,8 +194,7 @@ export class DockStore {
           if (!terminalStore.isConnected(newTab.id)) this.close();
         }
         this.selectTab(newTab.id);
-      }
-      else {
+      } else {
         this.selectedTabId = null;
         this.close();
       }
@@ -225,10 +240,19 @@ export class DockStore {
   }
 
   @action
+  restoreState(state: DockStorage) {
+    const { isOpen, tabs, selectedTabId, height } = state;
+
+    this.isOpen = isOpen;
+    this.tabs = tabs;
+    this.height = height;
+    this.selectedTabId = selectedTabId;
+  }
+
+  @action
   reset() {
-    this.selectedTabId = this.defaultTabId;
-    this.tabs.replace(this.initialTabs);
-    this.setHeight(this.defaultHeight);
+    this.restoreState(this.storage.defaultValue);
+    this.setHeight(DockStore.defaultHeight);
     this.close();
   }
 }

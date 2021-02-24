@@ -1,25 +1,29 @@
 import { autorun, observable, reaction } from "mobx";
-import { autobind, createStorage } from "../../utils";
+import { autobind, createStorage, StorageHelper } from "../../utils";
 import { dockStore, TabId } from "./dock.store";
 
 interface Options<T = any> {
-  storageName?: string; // name to sync data with localStorage
-  storageSerializer?: (data: T) => Partial<T>; // allow to customize data before saving to localStorage
+  storageName?: string; // persistent key
+  storageSerializer?: (data: T) => Partial<T>; // allow to customize data before saving
 }
 
 @autobind()
 export class DockTabStore<T = any> {
-  protected data = observable.map<TabId, T>([]);
+  protected data = observable.map<TabId, T>();
+  protected storage?: StorageHelper<Record<TabId, T>>;
 
   constructor(protected options: Options<T> = {}) {
-    const { storageName } = options;
+    this.init();
+  }
 
-    // auto-save to local-storage
-    if (storageName) {
-      const storage = createStorage<[TabId, T][]>(storageName, []);
+  protected init() {
+    const { storageName: storageKey } = this.options;
 
-      this.data.replace(storage.get());
-      reaction(() => this.serializeData(), (data: T | any) => storage.set(data));
+    // restore and sync with persistent storage
+    if (storageKey) {
+      this.storage = createStorage(storageKey, {});
+      this.data.replace(this.storage.get());
+      reaction(() => this.serializeData(), (data: T | any) => this.storage.set(data));
     }
 
     // clear data for closed tabs
@@ -50,13 +54,18 @@ export class DockTabStore<T = any> {
 
   setData(tabId: TabId, data: T) {
     this.data.set(tabId, data);
+    this.storage?.merge(() => ({ [tabId]: data }));
   }
 
   clearData(tabId: TabId) {
     this.data.delete(tabId);
+    this.storage?.merge(draft => {
+      delete draft[tabId];
+    });
   }
 
   reset() {
     this.data.clear();
+    this.storage?.clear();
   }
 }

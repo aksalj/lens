@@ -5,14 +5,22 @@ import { Namespace, namespacesApi } from "../../api/endpoints/namespaces.api";
 import { createPageParam } from "../../navigation";
 import { apiManager } from "../../api/api-manager";
 
-const storage = createStorage<string[]>("context_namespaces");
+const defaultNamespaces: string[] = [];
+
+const storage = createStorage("namespace-store", {
+  selectedNamespaces: defaultNamespaces,
+}, {
+  observable: {
+    deep: false, // allow to compare with "defaultNamespaces"
+  }
+});
 
 export const namespaceUrlParam = createPageParam<string[]>({
   name: "namespaces",
   isSystem: true,
   multiValues: true,
   get defaultValue() {
-    return storage.get() ?? []; // initial namespaces coming from URL or local-storage (default)
+    return storage.get().selectedNamespaces;
   }
 });
 
@@ -57,7 +65,7 @@ export class NamespaceStore extends KubeObjectStore<Namespace> {
 
   private autoUpdateUrlAndLocalStorage(): IReactionDisposer {
     return this.onContextChange(namespaces => {
-      storage.set(namespaces); // save to local-storage
+      storage.merge(() => ({ selectedNamespaces: namespaces })); // save to local-storage
       namespaceUrlParam.set(namespaces, { replaceHistory: true }); // update url
     }, {
       fireImmediately: true,
@@ -74,11 +82,11 @@ export class NamespaceStore extends KubeObjectStore<Namespace> {
   @computed
   private get initialNamespaces(): string[] {
     const namespaces = new Set(this.allowedNamespaces);
-    const prevSelectedNamespaces = storage.get();
+    const { selectedNamespaces } = storage.get();
 
     // return previously saved namespaces from local-storage (if any)
-    if (prevSelectedNamespaces) {
-      return prevSelectedNamespaces.filter(namespace => namespaces.has(namespace));
+    if (selectedNamespaces !== defaultNamespaces) {
+      return selectedNamespaces.filter(namespace => namespaces.has(namespace));
     }
 
     // otherwise select "default" or first allowed namespace

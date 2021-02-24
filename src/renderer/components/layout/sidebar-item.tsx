@@ -44,12 +44,13 @@ export class SidebarItem extends React.Component<SidebarItemProps> {
 
     this.props.onToggle?.(this.id, {
       props: this.props,
-      event: event,
+      event,
     });
-  }
+  };
 
   render() {
     const { isHidden, isActive, subMenus = [], icon, text, children, url } = this.props;
+
     if (isHidden) return null;
 
     const { id, expanded, compact } = this;

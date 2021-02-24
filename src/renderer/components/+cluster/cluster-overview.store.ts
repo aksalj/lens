@@ -1,4 +1,4 @@
-import { action, observable, reaction, when } from "mobx";
+import { action, comparer, observable, reaction, when } from "mobx";
 import { KubeObjectStore } from "../../kube-object.store";
 import { Cluster, clusterApi, IClusterMetrics } from "../../api/endpoints";
 import { autobind, createStorage } from "../../utils";
@@ -20,32 +20,35 @@ export enum MetricNodeRole {
 export class ClusterOverviewStore extends KubeObjectStore<Cluster> {
   api = clusterApi;
 
+  private storage = createStorage("cluster_overview", {
+    metricType: MetricType.CPU, // setup defaults
+    metricNodeRole: MetricNodeRole.WORKER,
+  });
+
   @observable metrics: Partial<IClusterMetrics> = {};
   @observable metricsLoaded = false;
-  @observable metricType: MetricType;
-  @observable metricNodeRole: MetricNodeRole;
+  @observable metricType: MetricType = this.storage.get().metricType;
+  @observable metricNodeRole: MetricNodeRole = this.storage.get().metricNodeRole;
 
   constructor() {
     super();
-    this.resetMetrics();
+    this.bindEvents();
+  }
 
-    // sync user setting with local storage
-    const storage = createStorage("cluster_metric_switchers", {});
+  private bindEvents() {
+    // sync user-settings to local-storage
+    reaction(() => ({
+      metricType: this.metricType,
+      metricNodeRole: this.metricNodeRole,
+    }), (userSettings) => {
+      this.storage.merge(() => userSettings);
+    }, {
+      equals: comparer.shallow,
+    });
 
-    Object.assign(this, storage.get());
-    reaction(() => {
-      const { metricType, metricNodeRole } = this;
-
-      return { metricType, metricNodeRole };
-    },
-    settings => storage.set(settings)
-    );
-
-    // auto-update metrics
+    // auto-refresh metrics on user action
     reaction(() => this.metricNodeRole, () => {
-      if (!this.metricsLoaded) return;
-      this.metrics = {};
-      this.metricsLoaded = false;
+      this.resetMetrics();
       this.loadMetrics();
     });
 
@@ -79,16 +82,16 @@ export class ClusterOverviewStore extends KubeObjectStore<Cluster> {
     }
   }
 
+  @action
   resetMetrics() {
     this.metrics = {};
     this.metricsLoaded = false;
-    this.metricType = MetricType.CPU;
-    this.metricNodeRole = MetricNodeRole.WORKER;
   }
 
   reset() {
     super.reset();
     this.resetMetrics();
+    this.storage.clear();
   }
 }
 
