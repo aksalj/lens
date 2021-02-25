@@ -9,7 +9,7 @@ const defaultNamespaces: string[] = [];
 
 const storage = createStorage("namespace-store", {
   selectedNamespaces: defaultNamespaces,
-}, {
+}).configure({
   observable: {
     deep: false, // allow to compare with "defaultNamespaces"
   }
@@ -65,7 +65,7 @@ export class NamespaceStore extends KubeObjectStore<Namespace> {
 
   private autoUpdateUrlAndLocalStorage(): IReactionDisposer {
     return this.onContextChange(namespaces => {
-      storage.merge(() => ({ selectedNamespaces: namespaces })); // save to local-storage
+      storage.merge({ selectedNamespaces: namespaces }); // save to local-storage
       namespaceUrlParam.set(namespaces, { replaceHistory: true }); // update url
     }, {
       fireImmediately: true,

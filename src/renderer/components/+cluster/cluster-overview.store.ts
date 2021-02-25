@@ -41,7 +41,7 @@ export class ClusterOverviewStore extends KubeObjectStore<Cluster> {
       metricType: this.metricType,
       metricNodeRole: this.metricNodeRole,
     }), (userSettings) => {
-      this.storage.merge(() => userSettings);
+      this.storage.merge(userSettings);
     }, {
       equals: comparer.shallow,
     });

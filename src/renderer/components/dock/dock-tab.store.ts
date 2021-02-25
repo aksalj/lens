@@ -54,7 +54,7 @@ export class DockTabStore<T = any> {
 
   setData(tabId: TabId, data: T) {
     this.data.set(tabId, data);
-    this.storage?.merge(() => ({ [tabId]: data }));
+    this.storage?.merge({ [tabId]: data });
   }
 
   clearData(tabId: TabId) {
