@@ -38,10 +38,10 @@ export function startUpdateChecking(interval = 1000 * 60 * 60 * 24): void {
   autoUpdater.autoInstallOnAppQuit = false;
 
   autoUpdater
-    .on("update-available", (args: UpdateInfo) => {
+    .on("update-available", (info: UpdateInfo) => {
       if (autoUpdater.autoInstallOnAppQuit) {
         // a previous auto-update loop was completed with YES+LATER, check if same version
-        if (installVersion === args.version) {
+        if (installVersion === info.version) {
           // same version, don't broadcast
           return;
         }
@@ -53,10 +53,14 @@ export function startUpdateChecking(interval = 1000 * 60 * 60 * 24): void {
        * didn't ask for.
        */
       autoUpdater.autoInstallOnAppQuit = false;
-      installVersion = args.version;
+      installVersion = info.version;
 
+      autoUpdater.downloadUpdate()
+        .catch(error => logger.error(`${AutoUpdateLogPrefix}: failed to download update`, { error: String(error) }));
+    })
+    .on("update-downloaded", (info: UpdateInfo) => {
       try {
-        const backchannel = `auto-update:${args.version}`;
+        const backchannel = `auto-update:${info.version}`;
 
         ipcMain.removeAllListeners(backchannel); // only one handler should be present
 
@@ -67,8 +71,8 @@ export function startUpdateChecking(interval = 1000 * 60 * 60 * 24): void {
           listener: handleAutoUpdateBackChannel,
           verifier: areArgsUpdateAvailableToBackchannel,
         });
-        logger.info(`${AutoUpdateLogPrefix}: broadcasting update available`, { backchannel, version: args.version });
-        broadcastMessage(UpdateAvailableChannel, backchannel, args);
+        logger.info(`${AutoUpdateLogPrefix}: broadcasting update available`, { backchannel, version: info.version });
+        broadcastMessage(UpdateAvailableChannel, backchannel, info);
       } catch (error) {
         logger.error(`${AutoUpdateLogPrefix}: broadcasting failed`, { error });
         installVersion = undefined;
