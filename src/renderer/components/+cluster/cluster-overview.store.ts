@@ -1,7 +1,8 @@
 import { action, comparer, observable, reaction, when } from "mobx";
 import { KubeObjectStore } from "../../kube-object.store";
 import { Cluster, clusterApi, IClusterMetrics } from "../../api/endpoints";
-import { autobind, createStorage } from "../../utils";
+import { autobind } from "../../utils";
+import { createStorage } from "../../local-storage";
 import { IMetricsReqParams, normalizeMetrics } from "../../api/endpoints/metrics.api";
 import { nodesStore } from "../+nodes/nodes.store";
 import { apiManager } from "../../api/api-manager";

@@ -1,6 +1,7 @@
 import MD5 from "crypto-js/md5";
 import { action, comparer, computed, IReactionOptions, observable, reaction } from "mobx";
-import { autobind, createStorage } from "../../utils";
+import { createStorage } from "../../local-storage";
+import { autobind } from "../../utils";
 import throttle from "lodash/throttle";
 
 export type TabId = string;
@@ -32,7 +33,7 @@ export interface DockStorage {
 export class DockStore {
   readonly minHeight = 100;
 
-  static get defaultHeight(){
+  static get defaultHeight() {
     return Math.round(window.innerHeight / 2.5);
   }
 

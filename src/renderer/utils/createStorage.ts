@@ -1,14 +1,10 @@
 // Helper for persisting data in local or remote storage.
 // Web-storage adapter is used by default (window.localStorage)
+// TODO: write unit/integration tests
 
 import { CreateObservableOptions } from "mobx/lib/api/observable";
 import { action, comparer, observable, toJS } from "mobx";
 import { Draft, produce } from "immer";
-
-// TODO: write unit/integration tests
-export function createStorage<T>(key: string, defaultValue?: T, options?: StorageHelperOptions<T>) {
-  return new StorageHelper(key, defaultValue, options);
-}
 
 export interface StorageHelperOptions<T = any> extends StorageConfiguration<T> {
   autoInit?: boolean; // default: true, preload data at early stages (e.g. in place of use)
@@ -19,10 +15,10 @@ export interface StorageConfiguration<T = any> {
   observable?: CreateObservableOptions;
 }
 
-export interface StorageAdapter<T = any> {
-  getItem(key: string): T | Promise<T>;
-  setItem(key: string, value: T): void;
-  removeItem(key: string): void;
+export interface StorageAdapter<T = any, C = StorageHelper<T>> {
+  getItem(this: C, key: string): T | Promise<T>;
+  setItem(this: C, key: string, value: T): void;
+  removeItem(this: C, key: string): void;
 }
 
 export const localStorageAdapter: StorageAdapter = {
@@ -49,11 +45,11 @@ export class StorageHelper<T = any> {
 
   @observable initialized = false;
   @observable.ref options: StorageHelperOptions = {};
-  @observable.ref storage: StorageAdapter<T>;
+  @observable.ref storage: StorageAdapter<T, ThisType<this>>;
   protected data = observable.box<T>();
 
-  constructor(readonly key: string, readonly defaultValue?: T, options: StorageHelperOptions = {}) {
-    this.options = { ...StorageHelper.defaultOptions, ...options };
+  constructor(readonly key: string, readonly defaultValue?: T, readonly initOptions: StorageHelperOptions = {}) {
+    this.options = { ...StorageHelper.defaultOptions, ...initOptions };
     this.configure(this.options);
 
     if (this.options.autoInit) {
@@ -78,9 +74,19 @@ export class StorageHelper<T = any> {
   }
 
   @action
+  protected setupStorage(storage: StorageAdapter<T>) {
+    this.storage = {
+      ...storage,
+      getItem: storage.getItem.bind(this),
+      setItem: storage.setItem.bind(this),
+      removeItem: storage.removeItem.bind(this),
+    };
+  }
+
+  @action
   configure(config: StorageConfiguration): this {
     if (config.storage) {
-      this.storage = config.storage;
+      this.setupStorage(config.storage);
     }
     if (config.observable) {
       this.data = observable.box<T>(this.data.get(), config.observable);
@@ -143,9 +149,5 @@ export class StorageHelper<T = any> {
     } catch (error) {
       console.error(`StorageHelper.clear(): ${error}`, this);
     }
-  }
-
-  toString(): string {
-    return JSON.stringify(this.get());
   }
 }

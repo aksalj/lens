@@ -1,4 +1,4 @@
-import { createStorage } from "../../utils/createStorage";
+import { createStorage } from "../../local-storage";
 
 export interface SidebarStorageModel {
   width: number;

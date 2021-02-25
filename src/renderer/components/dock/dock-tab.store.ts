@@ -1,5 +1,6 @@
 import { autorun, observable, reaction } from "mobx";
-import { autobind, createStorage, StorageHelper } from "../../utils";
+import { createStorage, StorageHelper } from "../../local-storage";
+import { autobind } from "../../utils";
 import { dockStore, TabId } from "./dock.store";
 
 interface Options<T = any> {

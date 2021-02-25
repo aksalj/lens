@@ -1,5 +1,6 @@
 import { action, comparer, computed, IReactionDisposer, IReactionOptions, observable, reaction } from "mobx";
-import { autobind, createStorage } from "../../utils";
+import { autobind } from "../../utils";
+import { createStorage } from "../../local-storage";
 import { KubeObjectStore, KubeObjectStoreLoadingParams } from "../../kube-object.store";
 import { Namespace, namespacesApi } from "../../api/endpoints/namespaces.api";
 import { createPageParam } from "../../navigation";
